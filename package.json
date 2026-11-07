@@ -65,7 +65,7 @@
     "prepublishOnly": "npm run typecheck && npm run build && npm run test:smoke"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.6",
     "adm-zip": "^0.6.1",
     "tsup": "^9.0.0",
     "tsx": "^4.23.15",
