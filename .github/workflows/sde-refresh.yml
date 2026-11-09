@@ -28,7 +28,18 @@ jobs:
     # without protection rules, or move NPM_TOKEN to a repository secret.
     environment: prod
     steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.CAPSULEERS_BOT_APP_ID }}
+          private-key: ${{ secrets.CAPSULEERS_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: capsuleers.fitting-engine
+
       - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - uses: actions/setup-node@v7
         with:
           node-version: 20
