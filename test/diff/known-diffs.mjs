@@ -9,7 +9,7 @@
  * pyfa-specific anomaly. Each entry is annotated with its ROOT CAUSE — it is NOT
  * a place to hide real bugs.
  *
- * Calibrated against pyfa commit: 3b9ce39b8bb41bb7e3fbf097f683da9143a48133
+ * Calibrated against pyfa commit: b79cd902b0bfa56a43cc5c08b6266fa842f25e85
  * (kept in lock-step with PYFA_REF in .github/workflows/diff-parity.yml.)
  *
  * Matching is by (ship, fitType, statKey). A matched diff is ACCEPTED and does
@@ -18,33 +18,13 @@
  * and MUST be classified (and their reason replaced) before release.
  *
  * Invariant: never regress `npm run test:pyfa` (662/0) to satisfy this harness.
- *
- * ---------------------------------------------------------------------------
- * This list was 19 entries and is now ONE. The other 18 were not quirks, they
- * were bugs, and each is fixed with its measurement recorded at the fix:
- * signature-radius stacking (the MJD's bloom is unpenalised in pyfa), prop-mod
- * velocity (PostMul and PostPercent share one penalty pool upstream), weapon
- * DPS (the Claw's own hull ROF bonus belongs in the chain), align time (a
- * transposed freighter effect), drone control range (one accumulator, on the
- * ship) and the Malediction's capacitor (an Interceptor's role bonus reaches a
- * Civilian Warp Disruptor, which pyfa filters by group and the SDE by skill).
- * Don't widen this list to make a red run green.
  */
 
 /** @typedef {{ ship: string, fitType: string, key: string, reason: string }} KnownDiff */
 
 /** @type {KnownDiff[]} */
 export const KNOWN_DIFFS = [
-    {
-        ship: "Griffin Navy Issue", fitType: "mixed", key: "capacitor.stablePercent",
-        reason: "cap-stability BOUNDARY, not a modelling difference: this fit draws 12.52 GJ/s against "
-            + "11.49 GJ/s of peak recharge and is held up only by an amortised cap booster, so the "
-            + "equilibrium sits at ~1.1 % of a 398 GJ capacitor — the part of the recharge curve that is "
-            + "nearly vertical. We solve that equilibrium analytically, pyfa reports the minimum its "
-            + "discrete simulation reaches; the two agree to 4 decimal places wherever the curve is flat "
-            + "(measured: 89.3883 % on both for a Malediction) and differ by 0.043 PERCENTAGE POINTS here. "
-            + "Chasing it would mean replacing the analytic solve with pyfa's time-stepped loop.",
-    },
+
 ]
 
 const _key = (d) => `${d.ship}|${d.fitType}|${d.key}`

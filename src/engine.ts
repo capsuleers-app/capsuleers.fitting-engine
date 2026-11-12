@@ -244,8 +244,8 @@ export function computeFit(
     })
 
     // ---------- Phase 3: apply effects ----------
-    // Order matters: skills before ship before subsystems before modules
-    // before drones/fighters before implants/boosters/mode. Each phase
+    // Order matters: skills before ship before subsystems before implants/
+    // boosters before modules before drones/fighters before mode. Each phase
     // commits its modifications; later phases see the partially-modified
     // state when reading source attribute values (intentional — implants
     // boosting CPU should boost a CPU value already augmented by skills).
@@ -296,18 +296,30 @@ export function computeFit(
     // lands too late and the ship sees the unscripted bonus. Charge value
     // reads only touch charge-side attributes (modifyingAttributeID lives on
     // the charge), so this ordering is safe for the charge's own modifiers.
+    // Character side BEFORE the modules, in TWO passes. Implant sets bonus each
+    // other (every member PreMuls the others' bonus attribute by its own attr
+    // 802), so every implant-to-implant modifier must land before any implant
+    // hands its — by then fully multiplied — bonus on. One pass makes the answer
+    // depend on the order the implants happen to be listed in. See ApplyPass.
+    // Before the modules because an implant can modify a module attribute the
+    // module then forwards to the ship, and module reads are eager: the 'Xyston'
+    // rigging implants cut a rig's `drawback`, which the rig then applies to the
+    // ship (a Federation Navy Synchronizer with the SY-1020 read 356.25 CPU on a
+    // Vexor where pyfa, whose attributes resolve lazily, reads 360). Nothing a
+    // module does feeds back into an implant's or booster's own attributes, so
+    // the reverse dependency does not exist.
+    const charSide = [...implants, ...boosters]
+    for (const it of charSide) applySourceItem(it, ctx, dataset, 'peer')
+    for (const it of charSide) applySourceItem(it, ctx, dataset, 'outgoing')
+
+    // pyfa's `earliest` runTime first: the Rig Synchronizer set count, which
+    // must be complete before the synchronizer reads it — whatever the order
+    // the modules are listed in (see RUNTIME_EARLIEST_EFFECT_IDS).
+    for (const m of modules) applySourceItem(m, ctx, dataset, 'earliest')
     for (const m of modules) if (m.charge) applySourceItem(m.charge, ctx, dataset)
     for (const m of modules) applySourceItem(m, ctx, dataset)
     for (const d of drones) applySourceItem(d, ctx, dataset)
     for (const f of fighters) applySourceItem(f, ctx, dataset)
-    // Character side in TWO passes. Implant sets bonus each other (every member
-    // PreMuls the others' bonus attribute by its own attr 802), so every
-    // implant-to-implant modifier must land before any implant hands its —
-    // by then fully multiplied — bonus to the ship. One pass makes the answer
-    // depend on the order the implants happen to be listed in. See ApplyPass.
-    const charSide = [...implants, ...boosters]
-    for (const it of charSide) applySourceItem(it, ctx, dataset, 'peer')
-    for (const it of charSide) applySourceItem(it, ctx, dataset, 'outgoing')
     if (mode) applySourceItem(mode, ctx, dataset)
 
     // Overheat first so the propmod handler (which reads

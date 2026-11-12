@@ -22,9 +22,15 @@ capacitor, navigation, targeting, fitting, projected, structure).
 
 ## Source architecture (`src/`)
 
-- `engine.ts` — `computeFit` orchestrator: applies skills → modules → charges
-  (BEFORE their parent module, so scripts/crystals land first) → drones →
-  fighters → implants → boosters → mode → legacy handlers → derive stats.
+- `engine.ts` — `computeFit` orchestrator: applies skills → ship → subsystems →
+  implants/boosters (peer, then outgoing) → modules' `earliest` pass → charges
+  (BEFORE their parent module, so scripts/crystals land first) → modules →
+  drones → fighters → mode → legacy handlers → derive stats. Reads are EAGER
+  (pyfa's are lazy), so a source must be applied after everything that modifies
+  the attributes it forwards: implants precede modules (the 'Xyston' rigging
+  implants trim a rig's `drawback`), and `RUNTIME_EARLIEST_EFFECT_IDS` (pyfa
+  `runTime='earliest'`, the Rig Synchronizer set count) runs for all modules
+  first, so module order cannot change a synchronizer's bonus.
 - `modifierEngine.ts` — the dispatcher. `applySourceItem` + `applyOneModifier`
   for SDE `modifierInfo`, ~85 `applyLegacy*` hardcoded handlers, plus the
   scaling/stacking decision tables:
