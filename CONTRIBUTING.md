@@ -176,9 +176,9 @@ three corpora, each answering a question the others can't.
 
 | `--source` | corpus | size |
 |---|---|---|
-| `generated` (default) | 4 synthetic fits for every published ship | 1 692 fits |
-| `workbench` | 2-3 REAL fits per hull, published on EVE Workbench | 913 fits / 330 hulls |
-| `implants` | every implant SET + ship-affecting booster, drawbacks off AND on | 1 857 fits |
+| `generated` (default) | 4 synthetic fits for every published ship | 1 720 fits |
+| `workbench` | 2-3 REAL fits per hull, published on EVE Workbench | 913 fits / 328 hulls |
+| `implants` | every implant SET + ship-affecting booster, drawbacks off AND on | 1 870 fits |
 
 The generated corpus is built by OUR OWN slot/charge predicates, so alone it
 only exercises what we already believe fits. That blind spot was expensive: the

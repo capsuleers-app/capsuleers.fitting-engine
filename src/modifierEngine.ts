@@ -144,7 +144,27 @@ function scaleForPipeline(
  * implant or booster — and only then `outgoing`, by which point each implant's
  * bonus attribute already carries the whole set multiplier.
  */
-export type ApplyPass = 'all' | 'peer' | 'outgoing'
+export type ApplyPass = 'all' | 'peer' | 'outgoing' | 'earliest'
+
+/**
+ * Effects pyfa runs at `runTime = 'earliest'` — ahead of every other effect of
+ * every item. Today that is the Rig Synchronizer set count: each faction module
+ * of a set (Imperial Navy, Caldari Navy, Federation Navy, Republic Fleet, Dark
+ * Blood, True Sansha, Dread Guristas, Shadow Serpentis, Domination) ModAdds its
+ * `rigSet*Module` into the fitted synchronizer's `rigSet*Bonus`, and the
+ * synchronizer then ModAdds that count into its own bonus attributes before
+ * handing them to the ship. Our attribute reads are eager, so the count must be
+ * complete before the synchronizer is applied: otherwise a faction module listed
+ * AFTER the rig silently dropped out of the set. `computeFit` runs these for all
+ * modules in a dedicated `earliest` pass; every other pass skips them. They are
+ * category-0 passives, so an OFFLINE module still counts — as in pyfa
+ * (`type = 'offline'`, Pyfa 41b0629). A mutated module counts for nothing: its
+ * type is the Abyssal result, which carries none of these effects (pyfa a2c7b8e).
+ */
+export const RUNTIME_EARLIEST_EFFECT_IDS: ReadonlySet<number> = new Set([
+    12963, 12964, 12965, 12966,          // rigSet{AmarrNavy,CaldariNavy,GallenteNavy,MinmatarFleet}BonusModAddSetRigGroup
+    12989, 12990, 12991, 12992, 12993,   // rigSet{DarkBlood,TrueSansha,DreadGuristas,ShadowSerpentis,Domination}…
+])
 
 /** True when a modifier's targets include an implant or a booster, i.e. it is
  *  a character-side peer bonus rather than something aimed at the ship. */
@@ -177,6 +197,9 @@ export function applySourceItem(
         // "*AddPassive" HP bonuses) must NOT be re-applied here, or the
         // bonus would be double-counted.
         if (LEGACY_HANDLED_EFFECT_IDS.has(eid)) continue
+        // `earliest` applies ONLY the earliest-runTime effects; every other
+        // pass leaves them to it (see RUNTIME_EARLIEST_EFFECT_IDS).
+        if ((pass === 'earliest') !== RUNTIME_EARLIEST_EFFECT_IDS.has(eid)) continue
         // Pilot-security-status-scaled bonuses (Alliance-Tournament frigates:
         // Sidewinder/Cambion/Whiptail/…). Pyfa computes `bonus = attr ×
         // pilotSecStatus`, and the default character has sec status 0, so the
@@ -201,7 +224,7 @@ export function applySourceItem(
         if (!effect) continue
         if (!source.appliesAtState(effect)) continue
         for (const mi of effect.modifierInfo) {
-            if (pass !== 'all') {
+            if (pass === 'peer' || pass === 'outgoing') {
                 const peer = isPeerModifier(source, mi, ctx, effect.id)
                 if (pass === 'peer' ? !peer : peer) continue
             }
@@ -542,6 +565,11 @@ const SHIP_BONUS_SCALING_SKILL: ReadonlyMap<number, number> = new Map([
     [487, 3334], [657, 3334], [1535, 3334],
     // Amarr Cruiser (3335)
     [478, 3335], [656, 3335], [2070, 3335],
+    // 6476 eliteBonusHeavyGunship3 (unpublished, so not in the bundle's
+    // attribute table): the Penitence's +7.5 km/level drone control range,
+    // effect 13045 (charID ItemModifier on attr 458), PreMul'd by Amarr Cruiser
+    // via effect 13046. pyfa: `skill='Amarr Cruiser'` — 37.5 km at V, not 7.5.
+    [6476, 3335],
     // Gallente Battleship (3336)
     [500, 3336], [561, 3336], [5240, 3336],
     // Minmatar Battleship (3337)

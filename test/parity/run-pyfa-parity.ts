@@ -563,7 +563,13 @@ const FITS: TestFit[] = [
             armorResist:  { em: 85.2, therm: 83.9, kin: 84.9, exp: 84.2 },
             hullResist:   { em: 59.8, therm: 59.8, kin: 59.8, exp: 59.8 },
             cpuUsed: 268.2, cpuMax: 275,
-            powerUsed: 1_040, powerMax: 1_050,
+            // powerMax / maxVelocity re-baselined at SDE build 3693310: CCP
+            // raised the Legion hull's powerOutput 625 → 650 and maxVelocity
+            // 185 → 200 (balance pass, no engine change). Screenshot values
+            // were 1 050 MW / 660 m/s; the new ones are the same fit computed
+            // by the pyfa oracle at pin b79cd90 (staticdata 3687575), which
+            // carries the new hull numbers: exactly 650/625 × and 200/185 ×.
+            powerUsed: 1_040, powerMax: 1_087.5,
             calibrationUsed: 225, calibrationMax: 400,
             capCapacity: 6_100,
             // Pyfa display reads "38.8 % stable" but the SDE Legion Defensive
@@ -580,7 +586,7 @@ const FITS: TestFit[] = [
             // reference number. (Cap capacity still asserted.) See the
             // Guardian fixture below for the real Logi cap-need bonus
             // exercised data-driven via SHIP_BONUS_SCALING_SKILL[678/679].
-            maxVelocity: 660,
+            maxVelocity: 713.5,   // 660 before SDE 3693310 — see powerMax above
             alignTime: 8.71,
             maxTargetingRangeKm: 87.5,
             scanResolution: 288,

@@ -5,8 +5,8 @@
  * never describe two different pyfa versions.
  *
  * The penalty is a property of the CALL, not of the attribute: pyfa writes
- * `stackingPenalties=True` one boost at a time, and of its 2812 attribute-boosting
- * calls only 403 penalise, across 287 effects. Both coarser models are
+ * `stackingPenalties=True` one boost at a time, and of its 2862 attribute-boosting
+ * calls only 425 penalise, across 304 effects. Both coarser models are
  * wrong and both were measured: penalising everything that shares an attribute
  * made a Rokh with a Microwarpdrive and a Micro Jump Drive read 6 335 m of
  * signature radius against pyfa's 6 875, while penalising a whole effect because
@@ -14,7 +14,7 @@
  * 13 161 — the Siege Module penalises its mass and repair bonuses but NOT its
  * turret damage bonus.
  *
- * Keys are attribute NAMES; 5 of them are receiver-qualified
+ * Keys are attribute NAMES; 6 of them are receiver-qualified
  * (`ship:maxVelocity`) because the same effect penalises that attribute on one
  * target and not on another. `*` stands for an attribute name pyfa computes at
  * runtime (`'%sDamage' % type`), which cannot be pinned to one name.
@@ -303,7 +303,7 @@ export const STACKING_PENALISED: ReadonlyMap<number, readonly string[]> = new Ma
     [11948, ['64#postMul']],
     [11953, ['653#postMul']],
     [12126, ['552#default']],
-    [12597, ['*#default', '564#default', '76#default']],
+    [12597, ['564#default', '76#default', 'fighter:*#default', 'fighter:*#preMul', 'ship:*#default']],
     [12761, ['3154#default']],
     [12794, ['37#postDiv']],
     [12795, ['37#postDiv']],
@@ -312,6 +312,23 @@ export const STACKING_PENALISED: ReadonlyMap<number, readonly string[]> = new Ma
     [12799, ['51#postDiv']],
     [12838, ['1371#postMul']],
     [12839, ['1372#postMul']],
+    [12968, ['6529#default']],
+    [12980, ['6529#default']],
+    [12981, ['6529#default']],
+    [12998, ['54#default']],
+    [12999, ['2044#default']],
+    [13002, ['20#default']],
+    [13009, ['76#default']],
+    [13010, ['64#default']],
+    [13015, ['552#default']],
+    [13020, ['6530#default']],
+    [13048, ['37#default']],
+    [13049, ['68#default']],
+    [13050, ['37#default']],
+    [13070, ['64#default']],
+    [13071, ['64#default']],
+    [13072, ['64#default']],
+    [13073, ['*#default']],
 ])
 
 /** Receiver classes used to qualify an ambiguous key. */

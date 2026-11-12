@@ -6,9 +6,9 @@ Three, and the default is only one of them:
 
 | `--source` | corpus | size | built by |
 |---|---|---|---|
-| `generated` (default) | 4 synthetic fits per published ship | 1 692 | `fit-generator.mjs` |
-| `workbench` | 2-3 REAL fits per hull from EVE Workbench | 913 / 330 hulls | `fit-sources.mjs` + `npm run corpus:fetch` |
-| `implants` | every implant SET + ship-affecting booster, drawbacks off AND on | 1 857 | `fit-sources.mjs` |
+| `generated` (default) | 4 synthetic fits per published ship | 1 720 | `fit-generator.mjs` |
+| `workbench` | 2-3 REAL fits per hull from EVE Workbench | 913 / 328 hulls | `fit-sources.mjs` + `npm run corpus:fetch` |
+| `implants` | every implant SET + ship-affecting booster, drawbacks off AND on | 1 870 | `fit-sources.mjs` |
 | `all` | every corpus in one run | | |
 
 The generated corpus is assembled by OUR OWN slot/charge predicates, so on its

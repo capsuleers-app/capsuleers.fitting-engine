@@ -14,9 +14,9 @@ Leggi se tocchi `test/`, `test/diff/known-diffs.mjs`, l'oracle pyfa, `PYFA_REF`,
 
    | source | what it is | size |
    |---|---|---|
-   | `generated` | 4 synthetic fits for every published ship (`fit-generator.mjs`) | 1 692 fits |
-   | `workbench` | 2-3 REAL fits per hull, published by capsuleers on EVE Workbench | 913 fits / 330 hulls |
-   | `implants` | every implant SET + every ship-affecting booster, drawbacks off AND on | 1 857 fits |
+   | `generated` | 4 synthetic fits for every published ship (`fit-generator.mjs`) | 1 720 fits |
+   | `workbench` | 2-3 REAL fits per hull, published by capsuleers on EVE Workbench | 913 fits / 328 hulls |
+   | `implants` | every implant SET + every ship-affecting booster, drawbacks off AND on | 1 870 fits |
 
    The generated corpus is built by OUR OWN slot/charge predicates, so on its
    own it only exercises what we already believe fits. The other two exist
@@ -46,16 +46,15 @@ Leggi se tocchi `test/`, `test/diff/known-diffs.mjs`, l'oracle pyfa, `PYFA_REF`,
 | suite | corpus | result |
 |---|---|---|
 | `test:pyfa` | 23 hand-curated fits vs pyfa screenshots | **662 / 0** |
-| `diff --source=generated` | 1 692 synthetic fits, every published hull | **1 691 / 1 692** |
-| `diff --source=workbench` | 913 real published fits, 330 hulls | **913 / 913** |
-| `diff --source=implants` | 1 857 implant-set / booster fits | **1 857 / 1 857** |
+| `diff --source=generated` | 1 720 synthetic fits, every published hull | **1 720 / 1 720** |
+| `diff --source=workbench` | 913 real published fits, 328 hulls | **913 / 913** |
+| `diff --source=implants` | 1 870 implant-set / booster fits | **1 870 / 1 870** |
 
-One accepted difference remains, and it is a boundary artefact rather than a
-modelling choice: a Griffin Navy Issue held barely cap-stable by an amortised
-cap booster settles at ~1.1 % of its capacitor, where the recharge curve is
-nearly vertical. We solve that equilibrium analytically and pyfa reports the
-minimum its time-stepped simulation reaches; the two agree to four decimals
-wherever the curve is flat.
+Measured at SDE 3693310 / pyfa `b79cd90`: `known-diffs.mjs` is EMPTY. The last
+entry (a Griffin Navy Issue held cap-stable at ~1.1 % by an amortised cap
+booster, where our analytic equilibrium and pyfa's time-stepped minimum part by
+0.04 pp) left with the corpus change, not with a fix: the boundary artefact can
+come back on any fit that lands on the vertical part of the recharge curve.
 
 > **HARD INVARIANT: never regress `test:pyfa` 662/0 to make `npm run diff` pass,
 > and never silently widen the known-diffs list.** The accepted diffs persist
@@ -97,8 +96,11 @@ Sundays 12:00 UTC, ahead of Monday's `pyfa-drift` (06:00) + `diff-parity` (07:00
 It moves the pin to pyfa master, recalibrates, and **auto-commits only when the
 recalibration has nothing to classify**; the moment a genuinely-new stat diff
 appears it opens a PR labelled `diff-parity` instead and fails the run, because a
-robot must never write a `known-diffs.mjs` reason. Nothing there is published —
-`PYFA_REF` and the registry are harness files, outside package.json `files`.
+robot must never write a `known-diffs.mjs` reason. It regenerates
+`src/stackingPenalised.ts` from the new pin before recalibrating and commits it
+with the pin (until 2026-11 it moved only `PYFA_REF` + `known-diffs.mjs`). The
+2026-10-25 run died at the push (master ruleset "solo via PR"), fixed by the
+App-token push of `af90280`; the pin was then bumped by hand to `b79cd90`.
 
 **The oracle's SQLAlchemy version is read from the pin's `pyproject.toml`**
 (`scripts/setup-pyfa-oracle.sh`), never hardcoded. pyfa moved to SQLAlchemy 2.x
