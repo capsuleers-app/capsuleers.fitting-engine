@@ -19,6 +19,8 @@ import { typeFitsSlotType, isTurretWeapon, isMissileLauncher, canFitModuleOnShip
 const META = { T1: 1, T2: 2, STORYLINE: 3, FACTION: 4, OFFICER: 5, DEADSPACE: 6 }
 const SLOTS = ['HI', 'MED', 'LO', 'RIG']
 const STRATEGIC_CRUISER_GROUP = 963
+const ATTR_LAUNCHER_HARDPOINTS = 101
+const ATTR_TURRET_HARDPOINTS = 102
 const SUBSYSTEM_GROUPS = [954, 955, 956, 957, 958] // defensive/electronic/offensive/propulsion/core
 const PROPULSION_MODULE_GROUP = 46  // Afterburners + MWDs; cap a fit at one (two
                                     //   active prop mods is unrealistic and the
@@ -114,9 +116,22 @@ function chargeFor(dataset, mod, r) {
 function weaponList(pool, kind) { return kind === 'launcher' ? pool.launchers : pool.turrets }
 
 /** Pick a weapon set for the ship's hardpoints, preferring metaGroup `meta`. */
-function fillWeapons(dataset, ship, pool, kind, count, meta, r, cpuMax, pgMax) {
+/** The hull as canFitModuleOnShip should see it: hardpoints from the COMPUTED fit, not the bare hull's
+ *  attributes — a T3C's hardpoints come from its subsystems (the bare Loki has none). */
+function withHardpoints(ship, turretMax, launcherMax) {
+    const attributes = ship.attributes.filter(a => a.id !== ATTR_LAUNCHER_HARDPOINTS && a.id !== ATTR_TURRET_HARDPOINTS)
+    attributes.push({ id: ATTR_LAUNCHER_HARDPOINTS, v: launcherMax }, { id: ATTR_TURRET_HARDPOINTS, v: turretMax })
+    return { ...ship, attributes }
+}
+
+/** canFitModuleOnShip(module, ship, slot): slot effect, canFitShipGroup/Type restrictions, rig size,
+ *  hardpoints. (Until 2026-11 this was called with its arguments swapped — `(ship, t, dataset)` — and
+ *  the result OBJECT was always truthy, so the filter never excluded anything. Fixed in both repos.) */
+const fitsHull = (t, hull, slot) => canFitModuleOnShip(t, hull, slot).ok
+
+function fillWeapons(dataset, ship, pool, kind, count, meta, r, cpuMax, pgMax, hull) {
     if (count <= 0) return []
-    const list = weaponList(pool, kind).filter(t => canFitModuleOnShip(ship, t, dataset) && sizeOk(t, ship, cpuMax, pgMax))
+    const list = weaponList(pool, kind).filter(t => fitsHull(t, hull, 'HI') && sizeOk(t, ship, cpuMax, pgMax))
     const preferred = list.filter(t => metaOf(t) === meta)
     const base = (preferred.length ? preferred : list)
     // group by groupID, pick one group deterministically, use its biggest-meta member
@@ -132,9 +147,9 @@ function fillWeapons(dataset, ship, pool, kind, count, meta, r, cpuMax, pgMax) {
 
 function shuffle(arr, r) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1));[a[i], a[j]] = [a[j], a[i]] } return a }
 
-function fillSlot(dataset, ship, pool, slot, count, metaPickers, r, cpuMax, pgMax) {
+function fillSlot(dataset, ship, pool, slot, count, metaPickers, r, cpuMax, pgMax, hull) {
     if (count <= 0) return []
-    let list = pool.bySlot[slot].filter(t => canFitModuleOnShip(ship, t, dataset) && sizeOk(t, ship, cpuMax, pgMax)
+    let list = pool.bySlot[slot].filter(t => fitsHull(t, hull, slot) && sizeOk(t, ship, cpuMax, pgMax)
         && !EXCLUDED_MODULE_GROUPS.has(t.groupID))
     // Leftover HIGH slots are utility (neuts/nos/smartbombs/etc.) — never fill
     // them with weapons (those go on hardpoints) or hardpoint-less weapon junk.
@@ -222,6 +237,7 @@ export function generateFits(dataset, ship, computeFit, skillProfile) {
     const primaryKind = launcherMax > turretMax ? 'launcher' : 'turret'
     const otherKind = primaryKind === 'launcher' ? 'turret' : 'launcher'
     const wpCount = Math.max(turretMax, launcherMax)
+    const hull = withHardpoints(ship, turretMax, launcherMax)
 
     function assemble(fitType, weapons, metaForSlot) {
         const r = rng((ship.id * 31 + fitType.length * 7) >>> 0)
@@ -229,19 +245,19 @@ export function generateFits(dataset, ship, computeFit, skillProfile) {
         const usedHi = w.length
         const mods = [
             ...w,
-            ...fillSlot(dataset, ship, pool, 'HI', Math.max(0, hi - usedHi), metaForSlot, r, cpuMax, pgMax),
-            ...fillSlot(dataset, ship, pool, 'MED', med, metaForSlot, r, cpuMax, pgMax),
-            ...fillSlot(dataset, ship, pool, 'LO', lo, metaForSlot, r, cpuMax, pgMax),
-            ...fillSlot(dataset, ship, pool, 'RIG', rig, metaForSlot, r, cpuMax, pgMax),
+            ...fillSlot(dataset, ship, pool, 'HI', Math.max(0, hi - usedHi), metaForSlot, r, cpuMax, pgMax, hull),
+            ...fillSlot(dataset, ship, pool, 'MED', med, metaForSlot, r, cpuMax, pgMax, hull),
+            ...fillSlot(dataset, ship, pool, 'LO', lo, metaForSlot, r, cpuMax, pgMax, hull),
+            ...fillSlot(dataset, ship, pool, 'RIG', rig, metaForSlot, r, cpuMax, pgMax, hull),
         ].map((m, i) => ({ id: `m${i}`, position: i, ...m }))
         return { shipTypeID: ship.id, fitType, modules: mods, drones: droneSet(dataset, bayMax, bwMax, r), subsystems, modeTypeID }
     }
 
     return [
-        assemble('bonused',     (r) => fillWeapons(dataset, ship, pool, primaryKind, wpCount, META.T2, r, cpuMax, pgMax), () => META.T2),
-        assemble('non-bonused', (r) => fillWeapons(dataset, ship, pool, otherKind, wpCount, META.T1, r, cpuMax, pgMax), () => META.T1),
-        assemble('t2',          (r) => fillWeapons(dataset, ship, pool, primaryKind, wpCount, META.T2, r, cpuMax, pgMax), () => META.T2),
-        assemble('mixed',       (r) => fillWeapons(dataset, ship, pool, primaryKind, wpCount, META.FACTION, r, cpuMax, pgMax),
+        assemble('bonused',     (r) => fillWeapons(dataset, ship, pool, primaryKind, wpCount, META.T2, r, cpuMax, pgMax, hull), () => META.T2),
+        assemble('non-bonused', (r) => fillWeapons(dataset, ship, pool, otherKind, wpCount, META.T1, r, cpuMax, pgMax, hull), () => META.T1),
+        assemble('t2',          (r) => fillWeapons(dataset, ship, pool, primaryKind, wpCount, META.T2, r, cpuMax, pgMax, hull), () => META.T2),
+        assemble('mixed',       (r) => fillWeapons(dataset, ship, pool, primaryKind, wpCount, META.FACTION, r, cpuMax, pgMax, hull),
                                 (i) => [META.T1, META.T2, META.FACTION, META.DEADSPACE, META.OFFICER][i % 5]),
     ]
 }

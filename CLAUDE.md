@@ -2,7 +2,8 @@
 
 Motore di calcolo fitting EVE Online (navi e strutture Upwell) a parità con Pyfa, pubblicato su npm
 come `eve-fit-engine`: `FittingDataset` + `Fit` → blocco stat completo. Versione: `package.json`.
-Percorsi relativi a questa cartella; per regole di orchestrazione vedi `../CLAUDE.md`.
+Percorsi relativi a questa cartella; per regole di orchestrazione vedi `../../CLAUDE.md`.
+Gemello Go: `../capsuleers.fitting-engine-go` (repo separato, stesse versioni): ogni fix di parità va in entrambi.
 
 ## Comandi
 ```bash
@@ -44,4 +45,4 @@ npm run build:data       # SDE CCP → rigenera il bundle data/
 | engine | docs/claude/engine.md | tocchi `src/`: orchestratore, modificatori, stacking, `derived/`, entry point |
 | parità | docs/claude/parity.md | tocchi `test/`, known-diffs, oracle/pin pyfa, workflow di parità |
 | rilascio | docs/claude/release.md | pubblichi, tocchi CI di release o refresh SDE |
-| marchio | ../docs/claude/brand.md | tocchi l'emblema |
+| marchio | ../../docs/claude/brand.md | tocchi l'emblema |

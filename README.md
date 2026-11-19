@@ -54,7 +54,7 @@ const { fit, warnings, computed } = await computeFromEft(`
 Gyrostabilizer II
 `)
 
-console.log(computed.derived.offense.totalDps)              // 197.6
+console.log(computed.derived.offense.totalDps)              // 110.1
 console.log(computed.derived.defense.ehpTotalAgainstProfile)
 console.log(computed.derived.navigation.maxVelocity)
 ```

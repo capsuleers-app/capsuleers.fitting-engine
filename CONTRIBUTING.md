@@ -85,7 +85,7 @@ src/
   eft/                # EFT parse/format
   profiles.ts, skillCheck.ts, t3cVariant.ts, fitChecks.ts, marketGroupTree.ts, export.ts
 test/
-  parity/run-pyfa-parity.ts   # 662-assertion fixture suite (+ pyfa/ screenshots)
+  parity/run-pyfa-parity.ts   # 662-assertion fixture suite: reads parity/fixtures.json (+ pyfa/ screenshots)
   diff/                       # differential harness (see §5)
   effect-coverage-audit.ts    # reports SDE effects with no handler
   smoke.mjs, smoke-node.mjs   # quick import/run smoke checks
@@ -114,7 +114,7 @@ Every command is an `npm run <name>`.
 | `diff` | differential vs the pyfa oracle, over three corpora | before commit; exit 0 = no unexpected diffs |
 | `diff:recalibrate` | regen `known-diffs.mjs` + bump pin (see §7) | ONLY when deliberately bumping pyfa |
 | `corpus:fetch` | harvest 2-3 REAL fits per hull from EVE Workbench into `.workbench/` | once, or to refresh the real-fit corpus (needs `EVEWORKBENCH_API_KEY`) |
-| `stacking:build` | regenerate `src/stackingPenalised.ts` from the pinned pyfa | after a pin bump; `-- --check` fails if stale |
+| `stacking:build` | regenerate `generated/stacking-penalised.json` + `src/stackingPenalised.ts` from the pinned pyfa | after a pin bump; `-- --check` fails if stale, `-- --check --from-json` verifies the TS against the JSON without pyfa |
 | `audit:coverage` | list SDE effects on fittable types with no handler | before commit; want "truly silent: 0" |
 | `drift` | diff pyfa `effects.py` vs snapshot + our handler set | weekly CI; run when porting effects |
 | `drift:update` | advance the effects snapshot | after you've handled the drift |
@@ -149,7 +149,7 @@ run the full `npm run diff` before committing.
 
 ## 4. Validation suite #1 — `test:pyfa` (the gate)
 
-`test/parity/run-pyfa-parity.ts` computes 23 hand-curated fits at **All-V**
+`test/parity/run-pyfa-parity.ts` computes the 21 hand-curated fits of `test/parity/fixtures.json` at **All-V**
 skills with a **Uniform** damage profile and asserts ~662 stats against values
 read from real Pyfa screenshots (`test/parity/pyfa/`). **Zero tolerance
 overrides** — the numbers match exactly (to display precision).
@@ -160,11 +160,14 @@ This is correctness ground truth. **Never weaken it to make another check pass.*
 
 1. Build the fit in Pyfa (All-V char, Uniform damage profile), screenshot the
    stat panel; drop the image in `test/parity/pyfa/`.
-2. Add a `TestFit` entry in `run-pyfa-parity.ts`: ship typeID, modules (typeID +
-   slot + state + optional charge), drones/subsystems/mode, and an `expected`
-   block keyed by the assertion labels (`Total EHP`, `Weapon DPS`, `Cap to empty
-   (s)`, etc.). Omit a key to skip that assertion.
+2. Add an entry to `test/parity/fixtures.json`: `name`, `screenshot`, the `fit`
+   (ship typeID, modules with typeID + slot + state + optional charge,
+   drones/subsystems/mode) and an `expected` block (omit a key to skip that
+   assertion; `toleranceOverrides` only for documented engine limitations).
 3. `npm run build && npm run test:pyfa` → green.
+4. The Go twin ([capsuleers.fitting-engine-go](https://github.com/capsuleers-app/capsuleers.fitting-engine-go))
+   has the SAME `test/parity/fixtures.json`, byte for byte: add the fixture there
+   too, in a linked PR.
 
 ---
 
@@ -258,7 +261,9 @@ headline-stat impact) so `audit:coverage` stays honest.
 ## 7. Bumping the pinned pyfa version (special workflow)
 
 `PYFA_REF` in `.github/workflows/diff-parity.yml`, `known-diffs.mjs` and the
-GENERATED `src/stackingPenalised.ts` are calibrated against **one** pyfa commit.
+GENERATED `generated/stacking-penalised.json` + `src/stackingPenalised.ts` are
+calibrated against **one** pyfa commit (the Go twin follows the same pin and must
+generate the same JSON byte for byte).
 **Move them together, never by hand:**
 
 ```bash

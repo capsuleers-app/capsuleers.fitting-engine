@@ -90,6 +90,11 @@ The oracle now reports each unsupplied typeID, and the runner:
   `oracle-skipped` in the summary,
 - prints an `=== ORACLE SDE DRIFT ===` section naming each typeID, its name and
   the fits it hit,
+- does the same for types pyfa knows but describes with different BASE
+  attributes (`attr-drift.mjs`, oracle op `attrs`; same rule as the Go twin):
+  each of our bundle's attributes plus mass/volume/capacity, drift if pyfa lacks
+  it or differs by more than 1e-6 relative; 1367 maxSubSystems excluded (pyfa
+  forces it to 4 on purpose). Each row lists attribute, our value and pyfa's,
 - **exits non-zero** — a stale pin silently shrinks coverage, so it must be
   visible; CI titles that issue *"pinned pyfa staticdata is stale"* rather than
   *"unexpected differences"*.

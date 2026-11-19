@@ -71,10 +71,12 @@
  */
 
 import { ATTR } from '../constants'
-import { isTurretWeapon } from '../fitChecks'
 import type { FitContext } from '../fitContext'
 import type { ItemState } from '../itemState'
 import type { FittingDataset, SdeEffect } from '../types'
+
+/** `turretFitted`: pyfa's TURRET hardpoint marker (eos Module.__calculateHardpoint). */
+const EFFECT_TURRET_FITTED = 42
 
 export interface CapacitorReport {
     /** Max capacitor capacity (GJ). */
@@ -345,7 +347,11 @@ function drainEntryFromEffect(effect: SdeEffect, mod: ItemState): DrainEntry | n
         // shared cycle); everything else is staggered evenly across its cycle.
         // Without this, N turrets were staggered (one drain at cycle/N) instead
         // of N together, shifting the cap timeline (time-to-empty off ~5-10 %).
-        disableStagger: isTurretWeapon(mod.type),
+        // pyfa's hardpoint is the `turretFitted` effect (Module.__calculateHardpoint),
+        // which every turret weapon carries but so do mining lasers and other
+        // turret-slot utilities: two Citizen Miners on a Deacon read 42.30 % cap
+        // stable against pyfa's 41.88 % while they were staggered.
+        disableStagger: mod.type.effects.some(e => e.id === EFFECT_TURRET_FITTED),
     }
 }
 

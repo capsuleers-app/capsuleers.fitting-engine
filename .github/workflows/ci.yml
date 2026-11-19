@@ -19,7 +19,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
-      - run: npm run test:pyfa        # 662 assertions vs committed data/
+      - run: npm run stacking:build -- --check --from-json   # committed JSON renders src/stackingPenalised.ts (no pyfa)
+      - run: npm run test:pyfa        # 662 assertions vs test/parity/fixtures.json + committed data/
       - run: npm run audit:coverage   # truly silent: 0
       - run: npm run test:drones      # bandwidth reads attr 1272, active counts drones
       - run: npm run test:smoke       # built dist/: base entry + batteries-included entry

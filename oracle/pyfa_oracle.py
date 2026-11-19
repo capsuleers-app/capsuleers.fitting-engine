@@ -34,6 +34,8 @@ sys._called_from_test = True  # eos -> in-memory saveddata + auto-created schema
 
 import json
 
+from sqlalchemy import text
+
 import eos.db
 from eos.saveddata.fit import Fit
 from eos.saveddata.ship import Ship
@@ -302,6 +304,23 @@ def main():
     # `dropped` reporting exists, moved one step earlier.
     if isinstance(payload, dict) and payload.get("op") == "known":
         json.dump({"known": [t for t in payload.get("typeIDs", []) if _known(t)]}, sys.stdout)
+        return
+
+    # `{"op": "attrs", "typeIDs": [...]}` returns the BASE attribute values the
+    # pinned staticdata holds for those types (eve.db, after pyfa's own
+    # db_update post-processing): {"attrs": {"<typeID>": {"<attributeID>": v}}}.
+    # The harness compares them with OUR bundle: a type pyfa knows but describes
+    # differently (CCP changed it after the pin) is staticdata drift exactly like
+    # an absent type, and the fits using it are skipped, not diffed.
+    if isinstance(payload, dict) and payload.get("op") == "attrs":
+        wanted = {int(t) for t in payload.get("typeIDs", [])}
+        attrs = {}
+        rows = eos.db.gamedata_session.execute(
+            text("SELECT typeID, attributeID, value FROM dgmtypeattribs"))
+        for tid, aid, value in rows:
+            if tid in wanted and value is not None:
+                attrs.setdefault(str(tid), {})[str(aid)] = float(value)
+        json.dump({"attrs": attrs}, sys.stdout)
         return
 
     specs = payload

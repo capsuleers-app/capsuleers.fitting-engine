@@ -27,6 +27,7 @@ import { generateFits } from './fit-generator.mjs'
 import { loadWorkbenchFits, generateImplantFits, generateImplantMatrix } from './fit-sources.mjs'
 import { oursToSchema, flatten, diffStats } from './stat-schema.mjs'
 import { isKnownDiff, knownDiffReason, KNOWN_DIFFS } from './known-diffs.mjs'
+import { specTypes, typeAttrDrift, fmtNum } from './attr-drift.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PYFA = resolve(HERE, '../../.pyfa')
@@ -203,8 +204,21 @@ async function main() {
             const c = computeFit(toOurFit(spec), dataset, { skillProfile: ALLV, damageProfile: UNIFORM })
             oursFlat = flatten(oursToSchema(c.derived))
         } catch (e) { oursFlat = { __error: e.message } }
-        items.push({ id, ship, fitType: spec.fitType, oursFlat })
+        items.push({ id, ship, fitType: spec.fitType, oursFlat, types: specTypes(spec) })
         oracleSpecs.push(toOracleSpec(spec, id))
+    }
+
+    // The pinned staticdata's view of every type the corpus uses (attribute drift, attr-drift.mjs).
+    const allTypes = []
+    const seenType = new Set()
+    for (const it of items) for (const t of it.types) if (!seenType.has(t)) { seenType.add(t); allTypes.push(t) }
+    const { attrs: pyAttrs } = callOracle({ op: 'attrs', typeIDs: allTypes })
+    const typeDrift = new Map()
+    for (const t of allTypes) {
+        const type = dataset.getType(t)
+        if (!type) continue
+        const d = typeAttrDrift(dataset, type, pyAttrs[String(t)])
+        if (d.length) typeDrift.set(t, d)
     }
 
     console.error(`[diff] running oracle on ${oracleSpecs.length} fits...`)
@@ -213,6 +227,7 @@ async function main() {
     // Diff.
     const allDiffs = []   // { ship, fitType, key, ours, pyfa, pctDelta }
     const driftByType = new Map()   // typeID -> { typeID, kind, name, fits: string[] }
+    const attrDriftByType = new Map()   // typeID -> { typeID, name, attrs, fits: string[] }
     let okFits = 0, oracleFail = 0, ourFail = 0, oracleSkipped = 0
     for (const it of items) {
         const o = oracle.get(it.id)
@@ -233,12 +248,29 @@ async function main() {
             }
             continue
         }
+        // pyfa knows every type, but describes some of them differently from our
+        // SDE (CCP changed them after the pin): the same incomparable-fit case,
+        // reported as attribute drift and skipped.
+        let drifted = false
+        for (const t of it.types) {
+            const d = typeDrift.get(t)
+            if (!d) continue
+            drifted = true
+            const e = attrDriftByType.get(t) ?? { typeID: t, name: dataset.getType(t).name, attrs: d, fits: [] }
+            e.fits.push(`${it.ship.name} / ${it.fitType}`)
+            attrDriftByType.set(t, e)
+        }
+        if (drifted) { oracleSkipped++; continue }
+        let oursFlat = it.oursFlat
         let pyfaFlat = flatten(o.stats)
         if (args.stats) {
+            // Filter BOTH sides: filtering only pyfa's turned every ours-only key into a diff.
             const keep = (k) => args.stats.some(g => k.startsWith(g))
-            pyfaFlat = Object.fromEntries(Object.entries(pyfaFlat).filter(([k]) => keep(k)))
+            const pick = (flat) => Object.fromEntries(Object.entries(flat).filter(([k]) => keep(k)))
+            oursFlat = pick(oursFlat)
+            pyfaFlat = pick(pyfaFlat)
         }
-        const diffs = diffStats(it.oursFlat, pyfaFlat, { tol: args.tol, eps: args.eps })
+        const diffs = diffStats(oursFlat, pyfaFlat, { tol: args.tol, eps: args.eps })
         if (!diffs.length) okFits++
         for (const d of diffs) allDiffs.push({ ship: it.ship.name, shipId: it.ship.id, fitType: it.fitType, ...d })
     }
@@ -251,12 +283,13 @@ async function main() {
     const unexpected = args.strict ? allDiffs : allDiffs.filter(d => !isKnownDiff(d))
     const accepted = args.strict ? [] : allDiffs.filter(isKnownDiff)
     const drift = [...driftByType.values()].sort((a, b) => b.fits.length - a.fits.length)
+    const attrDrift = [...attrDriftByType.values()].sort((a, b) => b.fits.length - a.fits.length)
 
-    report(unexpected, { total: items.length, okFits, oracleFail, ourFail, oracleSkipped, accepted, drift, corpusNotes }, args)
+    report(unexpected, { total: items.length, okFits, oracleFail, ourFail, oracleSkipped, accepted, drift, attrDrift, corpusNotes }, args)
     // Drift fails the run too: a stale pin silently shrinks coverage, and the
     // report names the fix. It is reported SEPARATELY from stat diffs so a red
     // run is diagnosable at a glance ("bump the pin" vs "the engine moved").
-    process.exit(unexpected.length || drift.length ? 1 : 0)
+    process.exit(unexpected.length || drift.length || attrDrift.length ? 1 : 0)
 }
 
 /** Resolve a typeID to a name across every dataset bucket (for drift reporting). */
@@ -280,13 +313,20 @@ function report(diffs, summary, args) {
     // oracle staleness, NOT an engine regression — surfacing it separately is
     // what keeps CCP shipping a new item from looking like we broke something.
     const drift = summary.drift ?? []
-    if (drift.length) {
-        console.log(`\n=== ORACLE SDE DRIFT (${drift.length} type${drift.length === 1 ? '' : 's'} absent from the pinned pyfa) ===`)
-        console.log(`  The pinned oracle cannot fit these, so ${summary.oracleSkipped} fit(s) were SKIPPED as not comparable.`)
+    const attrDrift = summary.attrDrift ?? []
+    const anyDrift = drift.length + attrDrift.length
+    if (anyDrift) {
+        console.log(`\n=== ORACLE SDE DRIFT (${drift.length} type${drift.length === 1 ? '' : 's'} absent from the pinned pyfa, ${attrDrift.length} with different attributes) ===`)
+        console.log(`  The pinned oracle cannot fit these as our SDE describes them, so ${summary.oracleSkipped} fit(s) were SKIPPED as not comparable.`)
         console.log('  Fix: bump PYFA_REF in .github/workflows/diff-parity.yml to a pyfa whose')
         console.log('  staticdata carries them, re-run `npm run diff:setup`, then `npm run diff:recalibrate`.')
         for (const d of drift) {
             console.log(`    ${String(d.typeID).padEnd(7)} ${String(d.name).padEnd(30)} ${String(d.kind).padEnd(10)} ${d.fits.length} fit${d.fits.length === 1 ? '' : 's'}: ${d.fits.slice(0, 4).join(', ')}${d.fits.length > 4 ? ', …' : ''}`)
+        }
+        if (attrDrift.length) console.log('  Attribute drift (type, attribute: ours vs the pinned pyfa):')
+        for (const d of attrDrift) {
+            console.log(`    ${String(d.typeID).padEnd(7)} ${String(d.name).padEnd(30)} ${d.fits.length} fit${d.fits.length === 1 ? '' : 's'}: ${d.fits.slice(0, 4).join(', ')}${d.fits.length > 4 ? ', …' : ''}`)
+            for (const x of d.attrs) console.log(`              ${x.name} (${x.attr}): ours=${fmtNum(x.ours)} pyfa=${fmtNum(x.pyfa)}`)
         }
     }
     const fmt = (v) => v == null ? '—' : (typeof v === 'number' ? (Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(3)) : String(v))
@@ -327,10 +367,10 @@ function report(diffs, summary, args) {
     console.log(`\nSummary: ${summary.okFits}/${summary.total} fits match | ${diffs.length} unexpected diff${diffs.length === 1 ? '' : 's'}` +
         ` across ${byStat.size} stats | ${accepted.length} accepted | our-fail ${summary.ourFail} | oracle-fail ${summary.oracleFail}` +
         ` | oracle-skipped ${summary.oracleSkipped ?? 0}`)
-    if (drift.length) {
+    if (anyDrift) {
         console.log(`⚠️  Oracle SDE drift — the pin is stale (see above). Engine parity was NOT assessed on ${summary.oracleSkipped} fit(s).`)
     }
-    if (!diffs.length && !drift.length) {
+    if (!diffs.length && !anyDrift) {
         // A green tick on an EMPTY or shrunken corpus is the lie this harness
         // exists to prevent, so say what was actually compared. `0/0 fits match`
         // is not a pass.

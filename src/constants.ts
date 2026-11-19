@@ -607,7 +607,7 @@ export const BOOSTER_SIDE_EFFECT_IDS: ReadonlySet<number> = new Set([
 export const OUT_OF_SCOPE_EFFECT_IDS: ReadonlyArray<LegacyEffectEntry> = [
     // ---- Hardpoint / slot dispatch markers consumed via fitChecks (not a modifier dispatch path). ----
     { id: 40,   name: null, handler: 'fitChecks::isMissileLauncher (hardpoint marker)' },
-    { id: 42,   name: null, handler: 'fitChecks::isTurretWeapon (hardpoint marker, also on miners)' },
+    { id: 42,   name: null, handler: 'fitChecks::isTurretWeapon + derived/capacitor no-stagger (hardpoint marker, also on miners)' },
     { id: 263,  name: null, handler: 'fitChecks::reload-cycle marker (barrage)' },
     // ---- Targeting-only behaviours: do not modify ship stats ----
     { id: 54,   name: null, handler: 'OUT-OF-SCOPE :: targetPassively (passive lock, no stat impact)' },
