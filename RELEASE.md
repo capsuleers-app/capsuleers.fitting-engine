@@ -59,6 +59,12 @@ manifest together so the removed init container and the new image land at once.
 
 ## Ongoing (hands-off)
 
+- **Merge to `master`** → `release.yml` gates (`test:pyfa`, `audit:coverage`, `test:drones`), bumps,
+  publishes and tags automatically (`chore(release): vX.Y.Z [auto]`). Version = the Go twin's highest tag
+  if higher than this package's, else patch + 1 (`scripts/next-version.sh`), so twin PRs merged together
+  release the same version in both repos. Docs/CI/test/script-only pushes release nothing
+  (`paths-ignore`, listed in `release.yml`); PRs never publish. A minor/major is a manual
+  **Actions → release → Run workflow** (`bump`).
 - **EVE SDE update** → `sde-refresh.yml` (daily) rebuilds `data/` from CCP, runs
   parity/coverage, and auto-publishes a patch if green. Bump the app dependency
   + redeploy to pick it up.

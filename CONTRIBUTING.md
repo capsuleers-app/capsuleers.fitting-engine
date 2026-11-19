@@ -315,14 +315,18 @@ npm run diff -- --source=all   # must exit 0 on every corpus
 | Workflow | Trigger | Does |
 |---|---|---|
 | `ci.yml` | every push to main/master + PR | typecheck + build + `test:pyfa` + `audit:coverage` (no publish) |
-| `sde-refresh.yml` | daily + manual | rebuild `data/` from CCP; if changed + parity green → bump patch + **publish to npm** |
+| `release.yml` | push to master (code paths) + manual minor/major | gate → twin-aligned bump → **publish to npm** → tag; PR = version preview only |
+| `sde-refresh.yml` | daily + manual | rebuild `data/` from CCP; if changed + parity green → bump + **publish to npm** |
 | `pyfa-drift.yml` | weekly + manual | detect changed pyfa effect IDs → open an issue |
 | `diff-parity.yml` | weekly + manual | run `npm run diff` vs the **pinned** pyfa → open an issue on unexpected diffs (non-blocking) |
 
-A normal push **does not publish** — only `sde-refresh` publishes, and only when
-the SDE bundle actually changes. To release engine fixes immediately, publish
-manually (see [`RELEASE.md`](./RELEASE.md)) and bump the dependency in the
-consumers (capsuleers.app, Capsuleers.IA).
+Every merge to `master` **releases automatically** (`release.yml`: gate, bump, `npm publish`, tag
+`vX.Y.Z`), unless it only touches docs/CI/tests/scripts/oracle/lockfile (`paths-ignore` in the workflow).
+The version is the Go twin's highest tag when that is higher than ours, otherwise patch + 1, so the two
+PRs of a twin fix, merged one after the other in either order, release the same version in both repos
+(`scripts/next-version.sh`; details in [`RELEASE.md`](./RELEASE.md)). PRs never publish; a minor/major
+bump is a manual run of the workflow. The daily `sde-refresh` still publishes data releases. Bump the
+dependency in the consumers (capsuleers.app, Capsuleers.IA) afterwards.
 
 ---
 
