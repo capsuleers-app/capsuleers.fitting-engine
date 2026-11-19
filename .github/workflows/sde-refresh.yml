@@ -1,7 +1,7 @@
 name: sde-refresh
 
 # Self-updating dataset. Daily, rebuild the bundled SDE from CCP's latest
-# official JSONL export. If it changed AND parity + coverage stay green, bump a
+# SDE API (sde.evetech.net). If it changed AND parity + coverage stay green, bump a
 # patch version, commit the new data/, and auto-publish to npm. If parity fails
 # (a real CCP change broke an assumption), open an issue and DO NOT publish.
 
@@ -57,7 +57,7 @@ jobs:
             echo "No dataset change — up to date."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Dataset changed (new SDE build $(cat data/.build))."
+            echo "Dataset changed (new SDE build $(cat data/.build), release $(cat .sde-src/.release))."
           fi
 
       - name: Parity + coverage gate
