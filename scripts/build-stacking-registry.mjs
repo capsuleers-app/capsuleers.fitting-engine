@@ -240,7 +240,7 @@ async function sdeEffectAttributes() {
 async function main() {
     for (const [what, file, how] of [
         ['the pinned pyfa checkout', EFFECTS_PY, 'npm run diff:setup'],
-        ['the raw SDE', SDE_ATTRS, 'node scripts/fetch-sde.mjs --force'],
+        ['the raw SDE', SDE_ATTRS, 'npm run build:data'],
     ]) {
         if (!existsSync(file)) {
             console.error(`[stacking] ${what} is missing (${path.relative(ROOT, file)}) — run \`${how}\` first.`)
