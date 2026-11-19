@@ -13,8 +13,9 @@ work automatically — no code change here.
 
 Flow ([`sde-refresh.yml`](.github/workflows/sde-refresh.yml), daily 05:00 UTC):
 1. `npm run build:data` → `scripts/fetch-sde.mjs` resolves the latest
-   `buildNumber` from CCP's `tranquility/latest.jsonl`, downloads the versioned
-   JSONL zip, then `scripts/build-bundle.ts` rebuilds the content-hashed bundle.
+   `buildNumber`/`release` from the SDE API index
+   (`sde.evetech.net/tranquility/latest/`), downloads only the needed tables and converts
+   them to the legacy zip shape (rules: `../docs/claude/sde-legacy-converter.py`), then `scripts/build-bundle.ts` rebuilds the content-hashed bundle.
 2. Gate: `npm run test:pyfa` + `npm run audit:coverage`. **Green** → commit
    `data/`, `npm version patch`, publish to npm. **Red** → report on the single
    open `sde-refresh` issue and fail the run; nothing is published.
