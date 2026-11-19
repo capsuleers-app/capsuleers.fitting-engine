@@ -1,31 +1,81 @@
 name: release
 
-# Manual code-release. Data releases publish automatically via sde-refresh.yml
-# (gated on a data/ change); engine/code fixes don't touch data/ and so never
-# trigger that path. This workflow bumps the version, publishes to npm using the
-# `prod` NPM_TOKEN, and pushes the release commit + tag — same publish step as
-# sde-refresh, triggered by hand for a code release.
+# Automatic code-release: every push to master (= every merged PR) bumps the version, publishes to npm
+# with the `prod` NPM_TOKEN and pushes the release commit + tag vX.Y.Z. Manual workflow_dispatch stays for
+# a minor/major bump. Data releases still come from sde-refresh.yml (daily).
+#
+# Version rule (scripts/next-version.sh): the Go twin's highest tag > mine -> reach it, otherwise
+# patch + 1. Two twin PRs merged in sequence, in either order, land on the same version in both repos.
+#
+# No loops, no double releases:
+#   - push paths-ignore: docs, CI, tests, scripts, oracle, lockfile (nothing that changes the package);
+#   - a push whose tip commit is an `[auto]` commit (this workflow, sde-refresh, pyfa-pin-bump) or
+#     already carries a v* tag releases nothing: that tip already includes everything before it;
+#   - `concurrency: release` is shared with sde-refresh, so the two never overlap.
 
 on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+      - 'test/**'
+      - 'scripts/**'
+      - 'oracle/**'
+      - 'package-lock.json'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.gitignore'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+      - 'test/**'
+      - 'scripts/**'
+      - 'oracle/**'
+      - 'package-lock.json'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.gitignore'
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Version bump'
+        description: 'auto = twin-aligned patch (same as a push); minor/major bump the higher of the two'
         required: true
-        default: patch
+        default: auto
         type: choice
-        options: [patch, minor, major]
+        options: [auto, minor, major]
 
 permissions:
-  contents: write
-
-concurrency:
-  group: release
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  publish:
+  # PRs never tag or publish: only print the version a merge would release.
+  preview:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Version a merge would release
+        run: |
+          V=$(bash scripts/next-version.sh auto)
+          echo "Merging this PR would release v$V (unless the Go twin tags a higher version first)." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
     # NPM_TOKEN lives on the `prod` Environment secret — declare it to read it.
     environment: prod
     steps:
@@ -38,26 +88,76 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: capsuleers.fitting-engine
 
+      # Always the CURRENT tip of master (not the pushed sha): a queued run releases everything merged.
       - uses: actions/checkout@v7
         with:
+          ref: master
           token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Decide (push only; a manual run always goes on)
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          skip=false
+          if [ "$EVENT" = push ]; then
+            if git log -1 --format=%s | grep -qF '[auto]'; then
+              skip=true; echo "Tip is an [auto] commit: it already includes every earlier change."
+            elif git tag --points-at HEAD | grep -q '^v'; then
+              skip=true; echo "Tip is already tagged: nothing to release."
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v7
+        if: steps.decide.outputs.skip != 'true'
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
-      - run: npm ci
+
+      - name: Compute the version
+        id: ver
+        if: steps.decide.outputs.skip != 'true'
+        env:
+          BUMP: ${{ inputs.bump || 'auto' }}
+        run: |
+          V=$(bash scripts/next-version.sh "$BUMP")
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$V"
+
+      - name: Install
+        if: steps.decide.outputs.skip != 'true'
+        run: npm ci
 
       # Gate the release on the parity suite (release gate) + the coverage audit,
       # so a code release can never ship a regression.
       - name: Parity + coverage gate
+        if: steps.decide.outputs.skip != 'true'
         run: npm run test:pyfa && npm run audit:coverage && npm run test:drones
 
       - name: Bump, publish & push
+        if: steps.decide.outputs.skip != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          BUMP: ${{ inputs.bump || 'auto' }}
+          V: ${{ steps.ver.outputs.v }}
         run: |
           git config user.name  "capsuleers-bot"
           git config user.email "bot@capsuleers.app"
-          npm version "${{ inputs.bump }}" -m "chore(release): v%s"
+          # Re-check right before tagging: the twin may have moved, master may have a newer tip, the
+          # version may exist already. An existing tag or npm version is NEVER overwritten.
+          [ "$(bash scripts/next-version.sh "$BUMP")" = "$V" ] || { echo "::error::version moved while the gate ran: re-run"; exit 1; }
+          git fetch origin master
+          [ "$(git rev-parse origin/master)" = "$(git rev-parse HEAD)" ] || { echo "::error::master moved while the gate ran: a newer run releases the new tip"; exit 1; }
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$V")" ] || git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+            echo "::error::tag v$V already exists"; exit 1
+          fi
+          if npm view "eve-fit-engine@$V" version >/dev/null 2>&1; then
+            echo "::error::eve-fit-engine@$V is already on npm"; exit 1
+          fi
+          npm version "$V" -m "chore(release): v%s [auto]"
+          git push --atomic --dry-run origin HEAD:master "refs/tags/v$V"   # fast-forward + permissions, before publishing
           npm publish --access public   # prepublishOnly runs typecheck + build
-          git push --follow-tags
+          git push --atomic origin HEAD:master "refs/tags/v$V"

@@ -33,6 +33,9 @@ npm run build:data       # SDE CCP → rigenera il bundle data/
 - Script del repo via `npm run`, non `node` diretto.
 - Script npm nuovi/rinominati, flussi di validazione/rilascio o invarianti di parità cambiati →
   aggiorna `CONTRIBUTING.md` e questo file nello stesso PR.
+- Rilascio AUTOMATICO a ogni push su `master` (release.yml: gate, bump, npm publish, tag): versione = tag più alto
+  del gemello Go se > della mia, altrimenti patch+1 (`scripts/next-version.sh`). Commit `[auto]` e push solo
+  docs/CI/test/scripts non rilasciano; minor/major = dispatch manuale. Un agente non fa tag né publish.
 - Emblema: non ritoccarlo qui (vedi brand.md).
 
 ## Aree (leggi solo se il task le tocca)

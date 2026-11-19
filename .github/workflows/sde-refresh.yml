@@ -15,7 +15,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: sde-refresh
+  group: release   # shared with release.yml: never two publishes at once
   cancel-in-progress: false
 
 jobs:
@@ -88,7 +88,9 @@ jobs:
           # create its own bump commit + tag on top of a clean tree.
           git add data
           git commit -m "chore(data): refresh SDE bundle to build $(cat data/.build) [auto]"
-          npm version patch -m "chore(release): v%s [auto]"
+          # Strictly above BOTH this package and the Go twin's highest tag: a data release must not
+          # reuse a version the twin already tagged with older data (see scripts/next-version.sh).
+          npm version "$(bash scripts/next-version.sh sde)" -m "chore(release): v%s [auto]"
           npm publish --access public   # prepublishOnly runs typecheck + build
           git push --follow-tags
 
