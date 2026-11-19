@@ -57,16 +57,28 @@ booster, where our analytic equilibrium and pyfa's time-stepped minimum part by
 come back on any fit that lands on the vertical part of the recharge curve.
 
 At SDE 3720952 (2026-11-19, pin `b79cd90` = pyfa master that day) `--source=all`
-reads 4497/4503 and exits 1, identically in the Go twin. One root cause, SDE vs
+read 4497/4503 with 4 unexpected diffs, identically in the Go twin. One root cause, SDE vs
 pin, not the engine: CCP renamed type 97955 to "Compact Imperial Navy Stasis
 Webifier" and cut its CPU from 25 to 16, and added a new 98845 "Imperial Navy
 Stasis Webifier" (CPU 25). The pinned pyfa still has 97955 at 25 CPU and no
 98845, hence 4 `fitting.cpuUsed` at exactly −9 (Vexor Navy Issue, Lachesis,
 Osprey, Scythe Fleet Issue `mixed`, each fitting one 97955) and 2 fits skipped as
 drift (98845). There is no newer pyfa to pin yet; it clears when pyfa updates its
-staticdata. Not a `known-diffs` entry. Proposed for both repos: have the oracle
-also report types whose BASE attributes differ from our bundle (today it only
-reports absent types), so a CCP change cannot pass for an engine diff.
+staticdata. Not a `known-diffs` entry. Since then the harness also declares
+**attribute drift** (below): the run reads 4497/4503 with 0 unexpected diffs and
+6 fits skipped as SDE drift (97955: cpu, maxRange, speedFactor; 98845 absent).
+
+**Attribute drift** (same rule in the Go twin, `tools/diff/drift.go`;
+here `test/diff/attr-drift.mjs`, oracle op `attrs`): for every type of a compared
+fit that the pinned pyfa knows, every attribute of OUR bundle's type (what the
+engine reads) plus mass/volume/capacity (pyfa attributes 4/161/38) is compared
+with pyfa's eve.db; drift if pyfa lacks it or `|ours - pyfa| > 1e-6 * max(1,
+|pyfa|)`. Not compared: attributes only pyfa has (e.g. cloneGradeRestriction) and
+1367 maxSubSystems, which pyfa's `db_update.py` forces from 5 to 4 on purpose.
+Over the whole bundle that flags 9 of 10 970 types (97955, four 'Vigilant' Vital
+modules, and the four T3Cs only through the excluded 1367). A fit using a drifted
+type is skipped and listed under `=== ORACLE SDE DRIFT` with type, attribute, our
+value and pyfa's, exactly like an absent type (and, like it, fails the run).
 
 The same run found one real engine diff, fixed in both repos: pyfa skips the cap
 stagger for every module with the `turretFitted` effect (42), mining lasers
