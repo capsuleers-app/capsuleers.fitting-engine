@@ -119,13 +119,13 @@ jobs:
         id: commit
         if: steps.pins.outputs.moved == 'true' && steps.recal.outputs.code == '0'
         run: |
-          if git diff --quiet -- test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts; then
+          if git diff --quiet -- test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts generated/stacking-penalised.json; then
             echo "Pin moved upstream but produced no on-disk change — skipping commit."
             exit 0
           fi
           git config user.name  "capsuleers-bot"
           git config user.email "bot@capsuleers.app"
-          git add test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts
+          git add test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts generated/stacking-penalised.json
           git commit -m "chore(diff): bump pyfa oracle pin to ${{ steps.pins.outputs.short }} [auto]" \
                      -m "Recalibrated with nothing to classify. See recal summary in the run log."
           git push
@@ -138,7 +138,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts; then
+          if git diff --quiet -- test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts generated/stacking-penalised.json; then
             echo "::error::recalibration failed before writing anything — see the log above."
             exit 1
           fi
@@ -146,7 +146,7 @@ jobs:
           git config user.name  "capsuleers-bot"
           git config user.email "bot@capsuleers.app"
           git checkout -B "$BR"   # -B, not -b: a re-run must reuse the branch, not abort
-          git add test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts
+          git add test/diff/known-diffs.mjs .github/workflows/diff-parity.yml src/stackingPenalised.ts generated/stacking-penalised.json
           git commit -m "chore(diff): pyfa pin -> ${{ steps.pins.outputs.short }} (entries PENDING REVIEW)"
           git push -u origin "$BR" --force-with-lease
           {

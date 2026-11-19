@@ -56,6 +56,23 @@ booster, where our analytic equilibrium and pyfa's time-stepped minimum part by
 0.04 pp) left with the corpus change, not with a fix: the boundary artefact can
 come back on any fit that lands on the vertical part of the recharge curve.
 
+At SDE 3720952 (2026-11-19, pin `b79cd90` = pyfa master that day) `--source=all`
+reads 4497/4503 and exits 1, identically in the Go twin. One root cause, SDE vs
+pin, not the engine: CCP renamed type 97955 to "Compact Imperial Navy Stasis
+Webifier" and cut its CPU from 25 to 16, and added a new 98845 "Imperial Navy
+Stasis Webifier" (CPU 25). The pinned pyfa still has 97955 at 25 CPU and no
+98845, hence 4 `fitting.cpuUsed` at exactly −9 (Vexor Navy Issue, Lachesis,
+Osprey, Scythe Fleet Issue `mixed`, each fitting one 97955) and 2 fits skipped as
+drift (98845). There is no newer pyfa to pin yet; it clears when pyfa updates its
+staticdata. Not a `known-diffs` entry. Proposed for both repos: have the oracle
+also report types whose BASE attributes differ from our bundle (today it only
+reports absent types), so a CCP change cannot pass for an engine diff.
+
+The same run found one real engine diff, fixed in both repos: pyfa skips the cap
+stagger for every module with the `turretFitted` effect (42), mining lasers
+included (`Module.__calculateHardpoint`), while the engine only did it for turret
+weapons (Deacon with two Citizen Miners: 42.30 % vs pyfa's 41.88 %).
+
 > **HARD INVARIANT: never regress `test:pyfa` 662/0 to make `npm run diff` pass,
 > and never silently widen the known-diffs list.** The accepted diffs persist
 > only because their proper fixes regress the fixture suite. When changing engine
@@ -66,8 +83,9 @@ come back on any fit that lands on the vertical part of the recharge curve.
 ### RULE — bumping the pyfa pin (always do this together)
 
 The diff oracle is pinned: `PYFA_REF` in `.github/workflows/diff-parity.yml`,
-`known-diffs.mjs` and the GENERATED `src/stackingPenalised.ts` are calibrated
-against ONE pyfa commit. **Whenever you bump
+`known-diffs.mjs` and the GENERATED `generated/stacking-penalised.json` +
+`src/stackingPenalised.ts` are calibrated against ONE pyfa commit (the Go twin
+capsuleers.fitting-engine-go follows this pin and generates the same JSON). **Whenever you bump
 pyfa deliberately, recalibrate both in the same change** — never move the pin
 without re-running the registry, and never edit the registry by hand for a pin
 change:
@@ -97,7 +115,7 @@ It moves the pin to pyfa master, recalibrates, and **auto-commits only when the
 recalibration has nothing to classify**; the moment a genuinely-new stat diff
 appears it opens a PR labelled `diff-parity` instead and fails the run, because a
 robot must never write a `known-diffs.mjs` reason. It regenerates
-`src/stackingPenalised.ts` from the new pin before recalibrating and commits it
+`generated/stacking-penalised.json` + `src/stackingPenalised.ts` from the new pin before recalibrating and commits it
 with the pin (until 2026-11 it moved only `PYFA_REF` + `known-diffs.mjs`). The
 2026-10-25 run died at the push (master ruleset "solo via PR"), fixed by the
 App-token push of `af90280`; the pin was then bumped by hand to `b79cd90`.

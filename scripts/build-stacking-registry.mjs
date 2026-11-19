@@ -29,14 +29,25 @@
  *                           (`'%sDamage' % type`), so it can't be pinned down;
  *                           the wildcard keeps those penalising.
  *
- *   npm run stacking:build             # rewrite src/stackingPenalised.ts
- *   npm run stacking:build -- --check  # fail if it would change
+ * ONE run, TWO outputs, both rendered from the same canonical model (never edit by hand):
+ *   generated/stacking-penalised.json   canonical model, byte-identical to the one the Go twin
+ *                                       (capsuleers.fitting-engine-go, `go run ./tools/stacking`)
+ *                                       generates from the same pyfa pin
+ *   src/stackingPenalised.ts            TS registry + `stackPenaltyGroup`
+ *
+ *   npm run stacking:build                          # analyse pyfa, rewrite both outputs
+ *   npm run stacking:build -- --check               # analyse pyfa, fail if either would change
+ *   npm run stacking:build -- --from-json           # no pyfa: re-render the TS from the committed JSON
+ *   npm run stacking:build -- --check --from-json   # no pyfa: verify the TS is what the JSON renders
+ *
+ * `--from-json` never touches the JSON, so it cannot notice pyfa moving: only the analysis path
+ * (default) does. Use it where .pyfa/.sde-src are not available.
  *
  * Reads the pyfa checkout the diff oracle already pins (.pyfa), so the registry
  * and the oracle can never describe two different pyfa versions.
  */
 import { createReadStream, existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import readline from 'node:readline'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -62,7 +73,8 @@ const SDE_EFFECTS = path.join(ROOT, '.sde-src', 'dogmaEffects.jsonl')
 const OVERRIDES = [
     [6001, 70, 'default'],   // freighterAgilityBonus2O2 ← pyfa's Effect5998
 ]
-const OUT = path.join(ROOT, 'src', 'stackingPenalised.ts')
+const OUT_TS = path.join(ROOT, 'src', 'stackingPenalised.ts')
+const OUT_JSON = path.join(ROOT, 'generated', 'stacking-penalised.json')
 
 /**
  * pyfa names attributes, the engine has ids — and the mapping must come from
@@ -237,7 +249,8 @@ async function sdeEffectAttributes() {
     return byEffect
 }
 
-async function main() {
+/** Run the pyfa analysis and return the canonical model. */
+async function analyse() {
     for (const [what, file, how] of [
         ['the pinned pyfa checkout', EFFECTS_PY, 'npm run diff:setup'],
         ['the raw SDE', SDE_ATTRS, 'npm run build:data'],
@@ -281,9 +294,33 @@ async function main() {
         console.warn(`[stacking] ${unresolved.size} attribute name(s) absent from the SDE, skipped: ${[...unresolved].slice(0, 8).join(', ')}`)
     }
     const ids = [...registry.keys()].sort((a, b) => a - b)
-    const rows = ids.map(id => `    [${id}, [${registry.get(id).map(k => `'${k}'`).join(', ')}]],`).join('\n')
+    return { calls, penalisedCalls, ambiguous, effects: ids.map(id => [id, registry.get(id)]) }
+}
 
-    const out = `/**
+/** Canonical JSON: one effect per line, stable and diff-friendly. */
+function renderJson(m) {
+    const rows = m.effects.map(([id, keys]) => `    [${id}, ${JSON.stringify(keys)}]`).join(',\n')
+    return `{
+  "pyfaAttributeBoostCalls": ${m.calls},
+  "penalisedCalls": ${m.penalisedCalls},
+  "receiverQualifiedKeys": ${m.ambiguous},
+  "effects": [
+${rows}
+  ]
+}
+`
+}
+
+function parseModel(text) {
+    const j = JSON.parse(text)
+    return { calls: j.pyfaAttributeBoostCalls, penalisedCalls: j.penalisedCalls, ambiguous: j.receiverQualifiedKeys, effects: j.effects }
+}
+
+function renderTs(m) {
+    const { calls, penalisedCalls, ambiguous } = m
+    const ids = m.effects.map(e => e[0])
+    const rows = m.effects.map(([id, keys]) => `    [${id}, [${keys.map(k => `'${k}'`).join(', ')}]],`).join('\n')
+    return `/**
  * Which (effect, attribute) pairs impose a STACKING PENALTY — GENERATED file,
  * do not edit by hand. Regenerate with \`npm run stacking:build\`, which reads
  * the pinned pyfa checkout under .pyfa so this registry and the diff oracle can
@@ -364,14 +401,33 @@ export function stackPenaltyGroup(
     return null
 }
 `
-    if (process.argv.includes('--check')) {
-        const cur = await readFile(OUT, 'utf8').catch(() => '')
-        if (cur !== out) { console.error('[stacking] registry is stale — run `npm run stacking:build`'); process.exit(2) }
-        console.log(`[stacking] up to date (${ids.length} effects, ${penalisedCalls} penalised calls)`)
+}
+
+async function main() {
+    const checkMode = process.argv.includes('--check')
+    const fromJson = process.argv.includes('--from-json')
+    const model = fromJson ? parseModel(await readFile(OUT_JSON, 'utf8')) : await analyse()
+    const outputs = [[OUT_JSON, renderJson(model)], [OUT_TS, renderTs(model)]]
+    // With --from-json the JSON is the INPUT: it is never rewritten, only required to be canonical.
+    if (fromJson && outputs[0][1] !== await readFile(OUT_JSON, 'utf8')) {
+        console.error('[stacking] generated/stacking-penalised.json is not in canonical form'); process.exit(2)
+    }
+    if (checkMode) {
+        const stale = []
+        for (const [file, text] of outputs) {
+            const cur = await readFile(file, 'utf8').catch(() => '')
+            if (cur !== text) stale.push(path.relative(ROOT, file))
+        }
+        if (stale.length) { console.error(`[stacking] stale: ${stale.join(', ')} — run \`npm run stacking:build\``); process.exit(2) }
+        console.log(`[stacking] up to date (${model.effects.length} effects, ${model.penalisedCalls} penalised calls; json + ts${fromJson ? ', rendered from the JSON' : ''})`)
         return
     }
-    await writeFile(OUT, out)
-    console.log(`[stacking] wrote ${path.relative(ROOT, OUT)} — ${penalisedCalls}/${calls} calls penalise across ${ids.length} effects (${ambiguous} receiver-qualified)`)
+    await mkdir(path.dirname(OUT_JSON), { recursive: true })
+    for (const [file, text] of outputs) {
+        if (fromJson && file === OUT_JSON) continue
+        await writeFile(file, text)
+    }
+    console.log(`[stacking] wrote json + ts — ${model.penalisedCalls}/${model.calls} calls penalise across ${model.effects.length} effects (${model.ambiguous} receiver-qualified)`)
 }
 
 main().catch(e => { console.error('[stacking]', e); process.exit(1) })

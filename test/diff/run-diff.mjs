@@ -233,12 +233,16 @@ async function main() {
             }
             continue
         }
+        let oursFlat = it.oursFlat
         let pyfaFlat = flatten(o.stats)
         if (args.stats) {
+            // Filter BOTH sides: filtering only pyfa's turned every ours-only key into a diff.
             const keep = (k) => args.stats.some(g => k.startsWith(g))
-            pyfaFlat = Object.fromEntries(Object.entries(pyfaFlat).filter(([k]) => keep(k)))
+            const pick = (flat) => Object.fromEntries(Object.entries(flat).filter(([k]) => keep(k)))
+            oursFlat = pick(oursFlat)
+            pyfaFlat = pick(pyfaFlat)
         }
-        const diffs = diffStats(it.oursFlat, pyfaFlat, { tol: args.tol, eps: args.eps })
+        const diffs = diffStats(oursFlat, pyfaFlat, { tol: args.tol, eps: args.eps })
         if (!diffs.length) okFits++
         for (const d of diffs) allDiffs.push({ ship: it.ship.name, shipId: it.ship.id, fitType: it.fitType, ...d })
     }
